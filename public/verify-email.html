@@ -3,10 +3,16 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>E-posta Doğrulama | BrainSwitch</title>
-
+    <title>E-posta Doğrulama | Bilgi Arenası</title>
+    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -16,6 +22,7 @@
             align-items: center;
             justify-content: center;
         }
+        
         .container {
             background: white;
             padding: 30px;
@@ -25,19 +32,25 @@
             max-width: 400px;
             text-align: center;
         }
+        
         .icon {
-            font-size: 48px;
-            margin-bottom: 10px;
+            font-size: 64px;
+            margin-bottom: 20px;
         }
+        
         h2 {
             color: #333;
             margin-bottom: 10px;
+            font-size: 24px;
         }
+        
         p {
             color: #666;
             margin-bottom: 20px;
             font-size: 15px;
+            line-height: 1.6;
         }
+        
         .btn {
             display: block;
             width: 100%;
@@ -45,39 +58,225 @@
             background: #4CAF50;
             color: white;
             text-decoration: none;
+            border: none;
             border-radius: 8px;
             margin-top: 10px;
             font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
         }
+        
         .btn:hover {
             background: #45a049;
+        }
+        
+        .btn-secondary {
+            background: #FF8C00;
+        }
+        
+        .btn-secondary:hover {
+            background: #e67e00;
+        }
+        
+        .loading {
+            display: none;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* iOS Safari için invisible iframe trick */
+        .hidden-iframe {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+            border: none;
         }
     </style>
 </head>
 
 <body>
+    <!-- iOS Safari için invisible iframe -->
+    <iframe id="hiddenIframe" class="hidden-iframe"></iframe>
+    
     <div class="container">
-        <div class="icon">📨</div>
-        <h2>E-posta Doğrulandı!</h2>
-        <p>Hesabınız başarıyla doğrulandı. Artık giriş yapabilirsiniz 🎉</p>
-        <a href="https://reset-expo.vercel.app/open-app" class="btn">Uygulamaya Dön</a>
-        <a href="https://reset-expo.vercel.app" class="btn" style="background:#FF8C00;">Ana Sayfa</a>
+        <div class="loading active" id="loading">
+            <div class="spinner"></div>
+            <p>E-posta adresiniz doğrulanıyor...</p>
+        </div>
+        
+        <div id="content" style="display: none;">
+            <div class="icon" id="icon">📨</div>
+            <h2 id="title">E-posta Doğrulama</h2>
+            <p id="message">İşleminiz tamamlanıyor...</p>
+            <button id="openApp" class="btn" style="display: none;">📱 Uygulamada Aç</button>
+            <a href="/" class="btn btn-secondary" style="display: none;" id="homeBtn">Ana Sayfa</a>
+        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
-        // Appwrite doğrulama linkinden gelen parametreleri alır:
-        const params = new URLSearchParams(window.location.search);
-        const success = params.get("success");
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+    
+    <script type="module">
+        import { Client, Account } from "https://esm.sh/appwrite";
 
-        if (success === "0") {
-            Swal.fire({
-                icon: "error",
-                title: "Doğrulama Başarısız!",
-                text: "E-posta doğrulama bağlantısı geçersiz veya süresi geçmiş.",
-                confirmButtonText: "Tamam"
-            });
+        const client = new Client()
+            .setEndpoint("https://fra.cloud.appwrite.io/v1")
+            .setProject("686b1f5f0031e12b789a");
+        const account = new Account(client);
+
+        const params = new URLSearchParams(window.location.search);
+        const userId = params.get("userId");
+        const secret = params.get("secret");
+
+        const loadingDiv = document.getElementById("loading");
+        const contentDiv = document.getElementById("content");
+        const iconDiv = document.getElementById("icon");
+        const titleDiv = document.getElementById("title");
+        const messageDiv = document.getElementById("message");
+        const openAppBtn = document.getElementById("openApp");
+        const homeBtn = document.getElementById("homeBtn");
+
+        // Deep link oluştur
+        const deepLink = `expoapp://verify-email?userId=${encodeURIComponent(userId || "")}&secret=${encodeURIComponent(secret || "")}`;
+
+        // Deep link'e yönlendirme fonksiyonu
+        function redirectToApp() {
+            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+            const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome/i.test(navigator.userAgent);
+            
+            if (isIOS && isSafari) {
+                // iOS Safari için iframe trick
+                console.log('📱 iOS Safari - iframe trick kullanılıyor');
+                document.getElementById('hiddenIframe').src = deepLink;
+                
+                // Kullanıcıya seçenek sun
+                Swal.fire({
+                    title: 'Uygulamada Aç',
+                    text: 'E-posta doğrulama işlemini uygulamada tamamlamak ister misiniz?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Uygulamada Aç',
+                    cancelButtonText: 'Web\'de Devam Et'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        setTimeout(() => {
+                            window.location.href = deepLink;
+                        }, 100);
+                    }
+                });
+            } else {
+                // Diğer browserlar ve Android - direkt yönlendir
+                console.log('📱 Diğer tarayıcı - direkt yönlendiriliyor');
+                window.location.href = deepLink;
+                
+                setTimeout(() => {
+                    if (!document.hidden) {
+                        console.log('❌ Deep link başarısız, web\'de devam ediliyor');
+                    }
+                }, 1000);
+            }
         }
+
+        // E-posta doğrulama işlemi
+        async function verifyEmail() {
+            if (!userId || !secret) {
+                loadingDiv.classList.remove("active");
+                contentDiv.style.display = "block";
+                iconDiv.textContent = "❌";
+                titleDiv.textContent = "Hata!";
+                messageDiv.textContent = "E-posta doğrulama linki geçersiz veya eksik parametreler var.";
+                homeBtn.style.display = "block";
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Hata!',
+                    text: 'Bağlantı parametreleri eksik.',
+                    confirmButtonText: 'Tamam'
+                });
+                return;
+            }
+
+            try {
+                console.log("📧 E-posta doğrulanıyor...", { userId, secret });
+                
+                // AppWrite'da e-posta doğrulama
+                await account.updateVerification(userId, secret);
+                
+                console.log("✅ E-posta başarıyla doğrulandı");
+                
+                // Başarılı durum
+                loadingDiv.classList.remove("active");
+                contentDiv.style.display = "block";
+                iconDiv.textContent = "✅";
+                titleDiv.textContent = "E-posta Doğrulandı!";
+                messageDiv.textContent = "Hesabınız başarıyla aktifleştirildi. Artık giriş yapabilirsiniz 🎉";
+                openAppBtn.style.display = "block";
+                homeBtn.style.display = "block";
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Başarılı!',
+                    html: '✅ <strong>E-posta başarıyla doğrulandı!</strong><br>Hesabınız aktifleştirildi 🎉',
+                    confirmButtonText: 'Harika!',
+                    timer: 3000,
+                    timerProgressBar: true
+                }).then(() => {
+                    // Otomatik olarak uygulamaya yönlendirmeyi dene
+                    redirectToApp();
+                });
+                
+            } catch (err) {
+                console.error("❌ E-posta doğrulama hatası:", err);
+                
+                let errorMsg = "E-posta doğrulanamadı. Lütfen tekrar deneyin.";
+                if (err?.message?.includes("expired") || err?.message?.includes("süresi")) {
+                    errorMsg = "Doğrulama linkinin süresi dolmuş. Lütfen yeni bir doğrulama e-postası isteyin.";
+                } else if (err?.message?.includes("invalid") || err?.message?.includes("geçersiz")) {
+                    errorMsg = "Doğrulama linki geçersiz. Lütfen yeni bir doğrulama e-postası isteyin.";
+                } else if (err?.message) {
+                    errorMsg = err.message;
+                }
+                
+                loadingDiv.classList.remove("active");
+                contentDiv.style.display = "block";
+                iconDiv.textContent = "❌";
+                titleDiv.textContent = "Doğrulama Başarısız";
+                messageDiv.textContent = errorMsg;
+                homeBtn.style.display = "block";
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Doğrulama Başarısız!',
+                    text: errorMsg,
+                    confirmButtonText: 'Tamam'
+                });
+            }
+        }
+
+        // "Uygulamada Aç" butonu
+        openAppBtn.addEventListener("click", () => {
+            redirectToApp();
+        });
+
+        // Sayfa yüklendiğinde doğrulama yap
+        verifyEmail();
     </script>
 </body>
 </html>

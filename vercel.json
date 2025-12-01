@@ -1,7 +1,9 @@
 {
   "rewrites": [
     { "source": "/reset-password", "destination": "/reset-password.html" },
-    { "source": "/reset-password/", "destination": "/reset-password.html" }
+    { "source": "/reset-password/", "destination": "/reset-password.html" },
+    { "source": "/verify-email", "destination": "/verify-email.html" },
+    { "source": "/verify-email/", "destination": "/verify-email.html" }
   ],
   "cleanUrls": true,
   "trailingSlash": false
